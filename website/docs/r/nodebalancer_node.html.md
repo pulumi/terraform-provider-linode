@@ -11,8 +11,6 @@ description: |-
 Provides a Linode NodeBalancer Node resource.  This can be used to create, modify, and delete Linodes NodeBalancer Nodes.
 For more information, see [Getting Started with NodeBalancers](https://www.linode.com/docs/platform/nodebalancer/getting-started-with-nodebalancers/) and the [Linode APIv4 docs](https://developers.linode.com/api/v4#operation/createNodeBalancerNode).
 
-The Linode Guide, [Create a NodeBalancer with Terraform](https://www.linode.com/docs/applications/configuration-management/create-a-nodebalancer-with-terraform/), provides step-by-step guidance and additional examples.
-
 ## Example Usage
 
 The following example shows how one might use this resource to configure NodeBalancer Nodes attached to Linode instances.
@@ -25,7 +23,7 @@ resource "linode_instance" "web" {
     region = "us-east"
     type = "g6-standard-1"
     authorized_keys = ["ssh-rsa AAAA...Gw== user@example.local"]
-    root_pass = "terraform-test"
+    root_pass = "test"
 
     private_ip = true
 }

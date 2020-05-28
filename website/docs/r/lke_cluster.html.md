@@ -12,7 +12,7 @@ Manages an LKE cluster.
 
 ## Example Usage
 
-```terraform
+```
 resource "linode_lke_cluster" "my-cluster" {
     label       = "my-cluster"
     k8s_version = "1.17"

@@ -1,3 +1,7 @@
+## 1.12.3 (June 08, 2020)
+
+* Fixed an issue where updating a disk can timeout even after `finished` was emitted.
+
 ## 1.11.2 (June 05, 2020)
 
 BUG FIXES:

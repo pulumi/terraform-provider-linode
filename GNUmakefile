@@ -18,7 +18,6 @@ lint: fmtcheck
 		-S022=false \
 		./...
 
-
 docscheck:
 	docker run --rm \
 		-v $$(pwd):/markdown:ro \
@@ -43,7 +42,7 @@ test: fmtcheck
 testacc: fmtcheck
 	TF_ACC=1 \
 	LINODE_API_VERSION="v4beta" \
-	go test $(TEST) -v $(TESTARGS) -timeout 120m -parallel=2 -ldflags="-X=github.com/terraform-providers/terraform-provider-linode/version.ProviderVersion=acc"
+	go test $(TEST) -v $(TESTARGS) -timeout 120m -parallel=2 -ldflags="-X=github.com/linode/terraform-provider-linode/version.ProviderVersion=acc"
 
 vet:
 	@echo "go vet ."
@@ -71,18 +70,4 @@ test-compile:
 	fi
 	go test -c $(TEST) $(TESTARGS) -timeout 120m -parallel=2
 
-website:
-ifeq (,$(wildcard $(GOPATH)/src/$(WEBSITE_REPO)))
-	echo "$(WEBSITE_REPO) not found in your GOPATH (necessary for layouts and assets), get-ting..."
-	git clone https://$(WEBSITE_REPO) $(GOPATH)/src/$(WEBSITE_REPO)
-endif
-	@$(MAKE) -C $(GOPATH)/src/$(WEBSITE_REPO) website-provider PROVIDER_PATH=$(shell pwd) PROVIDER_NAME=$(PKG_NAME)
-
-website-test:
-ifeq (,$(wildcard $(GOPATH)/src/$(WEBSITE_REPO)))
-	echo "$(WEBSITE_REPO) not found in your GOPATH (necessary for layouts and assets), get-ting..."
-	git clone https://$(WEBSITE_REPO) $(GOPATH)/src/$(WEBSITE_REPO)
-endif
-	@$(MAKE) -C $(GOPATH)/src/$(WEBSITE_REPO) website-provider-test PROVIDER_PATH=$(shell pwd) PROVIDER_NAME=$(PKG_NAME)
-
-.PHONY: build sweep test testacc vet fmt fmtcheck errcheck test-compile website website-test
+.PHONY: build sweep test testacc vet fmt fmtcheck errcheck test-compile

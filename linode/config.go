@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/logging"
 	"github.com/hashicorp/terraform-plugin-sdk/httpclient"
 	"github.com/linode/linodego"
-	"github.com/terraform-providers/terraform-provider-linode/version"
+	"github.com/linode/terraform-provider-linode/version"
 	"golang.org/x/oauth2"
 )
 
@@ -39,8 +39,8 @@ func (c *Config) Client() linodego.Client {
 	client := linodego.NewClient(oauth2Client)
 
 	tfUserAgent := httpclient.TerraformUserAgent(c.terraformVersion)
-	userAgent := strings.TrimSpace(fmt.Sprintf("%s terraform-provider-linode/%s linodego/%s",
-		tfUserAgent, version.ProviderVersion, linodego.Version))
+	userAgent := strings.TrimSpace(fmt.Sprintf("%s terraform-provider-linode/%s",
+		tfUserAgent, version.ProviderVersion))
 	if c.UAPrefix != "" {
 		userAgent = c.UAPrefix + " " + userAgent
 	}

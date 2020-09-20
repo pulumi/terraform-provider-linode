@@ -1,4 +1,18 @@
+## 1.13.0 (September 18, 2020)
+
+FEATURES:
+
+* **New Resource** `linode_object_storage_object`
+
+BUG FIXES:
+
+* Fixed an issue with the `linode_domain` and `linode_domain_record` resources where the rounding of domain second values for `ttl_sec`, `retry_sec`, `expire_sec` and `refresh_sec` fields caused inconsistent state warnings. A diff-suppressor was added to silence state discrepancies between declared and provisioned state. This now works as it was originally documented.
+
 ## 1.12.3 (June 08, 2020)
+
+Note: This release was published incorrectly as 1.12.3, but was intended as 1.11.3.
+
+BUG FIXES:
 
 * Fixed an issue where updating a disk can timeout even after `finished` was emitted.
 

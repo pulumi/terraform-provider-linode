@@ -1,8 +1,20 @@
+## 1.13.4 (November 13, 2020)
+
+FEATURES:
+
+* **New Resource** `linode_vlan`
+
+## 1.13.3 (October 27, 2020)
+
+ENHANCEMENTS:
+
+* resource/linode_object_storage_key: Add `bucket_access` field for Limited Access Object Storage Keys.
+
 ## 1.13.2 (October 7, 2020)
 
 ENHANCEMENTS:
 
-* resource/linode_object_storage_bucket: Add `cert` field
+* resource/linode_object_storage_bucket: Add `cert` field.
 
 ## 1.13.0 (September 18, 2020)
 

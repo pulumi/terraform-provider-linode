@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/linode/linodego"
 )
 
@@ -83,7 +83,7 @@ func TestAccLinodeToken_basic(t *testing.T) {
 }
 
 func testAccCheckLinodeTokenExists(s *terraform.State) error {
-	client := testAccProvider.Meta().(linodego.Client)
+	client := testAccProvider.Meta().(*ProviderMeta).Client
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "linode_token" {
@@ -105,10 +105,7 @@ func testAccCheckLinodeTokenExists(s *terraform.State) error {
 }
 
 func testAccCheckLinodeTokenDestroy(s *terraform.State) error {
-	client, ok := testAccProvider.Meta().(linodego.Client)
-	if !ok {
-		return fmt.Errorf("Error getting Linode client")
-	}
+	client := testAccProvider.Meta().(*ProviderMeta).Client
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "linode_token" {
 			continue

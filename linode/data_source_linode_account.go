@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/linode/linodego"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceLinodeAccount() *schema.Resource {
@@ -77,7 +76,7 @@ func dataSourceLinodeAccount() *schema.Resource {
 }
 
 func dataSourceLinodeAccountRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	account, err := client.GetAccount(context.Background())
 	if err != nil {

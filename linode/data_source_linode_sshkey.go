@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/linode/linodego"
 )
 
@@ -34,7 +34,7 @@ func dataSourceLinodeSSHKey() *schema.Resource {
 }
 
 func dataSourceLinodeSSHKeyRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	reqLabel := d.Get("label").(string)
 

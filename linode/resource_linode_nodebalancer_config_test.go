@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/linode/linodego"
 )
 
@@ -43,8 +43,8 @@ func TestAccLinodeNodeBalancerConfig_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resName, "cipher_suite"),
 					resource.TestCheckNoResourceAttr(resName, "ssl_common"),
 					resource.TestCheckNoResourceAttr(resName, "ssl_ciphersuite"),
-					resource.TestCheckResourceAttr(resName, "node_status.up", "0"),
-					resource.TestCheckResourceAttr(resName, "node_status.down", "0"),
+					resource.TestCheckResourceAttr(resName, "node_status.0.up", "0"),
+					resource.TestCheckResourceAttr(resName, "node_status.0.down", "0"),
 					resource.TestCheckNoResourceAttr(resName, "ssl_cert"),
 				),
 			},
@@ -128,7 +128,7 @@ func TestAccLinodeNodeBalancerConfig_proxyProtocol(t *testing.T) {
 }
 
 func testAccCheckLinodeNodeBalancerConfigExists(s *terraform.State) error {
-	client := testAccProvider.Meta().(linodego.Client)
+	client := testAccProvider.Meta().(*ProviderMeta).Client
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "linode_nodebalancer_config" {
@@ -154,10 +154,7 @@ func testAccCheckLinodeNodeBalancerConfigExists(s *terraform.State) error {
 }
 
 func testAccCheckLinodeNodeBalancerConfigDestroy(s *terraform.State) error {
-	client, ok := testAccProvider.Meta().(linodego.Client)
-	if !ok {
-		return fmt.Errorf("Error getting Linode client")
-	}
+	client := testAccProvider.Meta().(*ProviderMeta).Client
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "linode_nodebalancer_config" {
 			continue

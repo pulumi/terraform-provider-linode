@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/linode/linodego"
 )
 
@@ -77,7 +77,7 @@ func resourceLinodeVolume() *schema.Resource {
 }
 
 func resourceLinodeVolumeRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode Volume ID %s as int: %s", d.Id(), err)
@@ -106,10 +106,7 @@ func resourceLinodeVolumeRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceLinodeVolumeCreate(d *schema.ResourceData, meta interface{}) error {
-	client, ok := meta.(linodego.Client)
-	if !ok {
-		return fmt.Errorf("Invalid Client when creating Linode Volume")
-	}
+	client := meta.(*ProviderMeta).Client
 	d.Partial(true)
 
 	var linodeID *int
@@ -138,15 +135,11 @@ func resourceLinodeVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	d.SetId(fmt.Sprintf("%d", volume.ID))
-	d.SetPartial("label")
-	d.SetPartial("region")
-	d.SetPartial("size")
 
 	if createOpts.LinodeID > 0 {
 		if _, err := client.WaitForVolumeLinodeID(context.Background(), volume.ID, linodeID, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
 			return err
 		}
-		d.SetPartial("linode_id")
 	}
 
 	if _, err = client.WaitForVolumeStatus(context.Background(), volume.ID, linodego.VolumeActive, int(d.Timeout(schema.TimeoutCreate).Seconds())); err != nil {
@@ -159,7 +152,7 @@ func resourceLinodeVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	d.Partial(true)
 
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
@@ -183,7 +176,6 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 		}
 
 		d.Set("size", size)
-		d.SetPartial("size")
 	}
 
 	updateOpts := linodego.VolumeUpdateOptions{}
@@ -208,9 +200,7 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 			return err
 		}
 		d.Set("tags", volume.Tags)
-		d.SetPartial("tags")
 		d.Set("label", volume.Label)
-		d.SetPartial("label")
 	}
 
 	var linodeID *int
@@ -255,7 +245,6 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 		}
 
 		d.Set("linode_id", linodeID)
-		d.SetPartial("linode_id")
 	}
 	d.Partial(false)
 
@@ -263,7 +252,7 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceLinodeVolumeDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id64, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode Volume id %s as int", d.Id())

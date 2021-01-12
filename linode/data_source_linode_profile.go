@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/linode/linodego"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceLinodeProfile() *schema.Resource {
@@ -102,7 +101,7 @@ func dataSourceLinodeProfile() *schema.Resource {
 }
 
 func dataSourceLinodeProfileRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	profile, err := client.GetProfile(context.Background())
 	if err != nil {

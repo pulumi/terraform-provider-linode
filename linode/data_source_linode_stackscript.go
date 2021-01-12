@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/linode/linodego"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceLinodeStackscript() *schema.Resource {
@@ -120,7 +119,7 @@ func dataSourceLinodeStackscript() *schema.Resource {
 }
 
 func dataSourceLinodeStackscriptRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id := d.Get("id").(int)
 
 	ss, err := client.GetStackscript(context.Background(), id)

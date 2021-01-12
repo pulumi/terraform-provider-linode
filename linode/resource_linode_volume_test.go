@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/linode/linodego"
 )
 
@@ -86,7 +86,7 @@ func TestAccLinodeVolume_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resName, "region", "us-west"),
 					resource.TestCheckResourceAttr(resName, "linode_id", "0"),
 					resource.TestCheckResourceAttr(resName, "tags.#", "1"),
-					resource.TestCheckResourceAttr(resName, "tags.4106436895", "tf_test"),
+					resource.TestCheckResourceAttr(resName, "tags.0", "tf_test"),
 				),
 			},
 
@@ -124,8 +124,8 @@ func TestAccLinodeVolume_update(t *testing.T) {
 					testAccCheckLinodeVolumeExists(resName, &volume),
 					resource.TestCheckResourceAttr(resName, "label", fmt.Sprintf("%s_r", volumeName)),
 					resource.TestCheckResourceAttr(resName, "tags.#", "2"),
-					resource.TestCheckResourceAttr(resName, "tags.4106436895", "tf_test"),
-					resource.TestCheckResourceAttr(resName, "tags.2667398925", "tf_test_2"),
+					resource.TestCheckResourceAttr(resName, "tags.0", "tf_test"),
+					resource.TestCheckResourceAttr(resName, "tags.1", "tf_test_2"),
 				),
 			},
 		},
@@ -278,7 +278,7 @@ func TestAccLinodeVolume_reattachedBetweenInstances(t *testing.T) {
 
 func testAccCheckLinodeVolumeExists(name string, volume *linodego.Volume) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		client := testAccProvider.Meta().(linodego.Client)
+		client := testAccProvider.Meta().(*ProviderMeta).Client
 
 		rs, ok := s.RootModule().Resources[name]
 		if !ok {
@@ -306,10 +306,7 @@ func testAccCheckLinodeVolumeExists(name string, volume *linodego.Volume) resour
 }
 
 func testAccCheckLinodeVolumeDestroy(s *terraform.State) error {
-	client, ok := testAccProvider.Meta().(linodego.Client)
-	if !ok {
-		return fmt.Errorf("Error getting Linode client")
-	}
+	client := testAccProvider.Meta().(*ProviderMeta).Client
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "linode_volume" {
 			continue

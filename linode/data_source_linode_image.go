@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/linode/linodego"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceLinodeImage() *schema.Resource {
@@ -73,7 +72,7 @@ func dataSourceLinodeImage() *schema.Resource {
 }
 
 func dataSourceLinodeImageRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	reqImage := d.Get("id").(string)
 

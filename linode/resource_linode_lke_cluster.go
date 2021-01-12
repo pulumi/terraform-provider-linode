@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/linode/linodego"
 	k8scondition "github.com/linode/linodego/k8s/pkg/condition"
 )
@@ -129,7 +129,7 @@ func resourceLinodeLKECluster() *schema.Resource {
 }
 
 func resourceLinodeLKEClusterRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.Atoi(d.Id())
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode LKE Cluster ID: %s", err)
@@ -167,7 +167,7 @@ func resourceLinodeLKEClusterRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceLinodeLKEClusterCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	createOpts := linodego.LKEClusterCreateOptions{
 		Label:      d.Get("label").(string),
@@ -202,7 +202,7 @@ func resourceLinodeLKEClusterCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceLinodeLKEClusterUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.Atoi(d.Id())
 	if err != nil {
 		return fmt.Errorf("failed parsing Linode LKE Cluster ID: %s", err)
@@ -291,7 +291,7 @@ func resourceLinodeLKEClusterUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceLinodeLKEClusterDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.Atoi(d.Id())
 	if err != nil {
 		return fmt.Errorf("failed parsing Linode LKE Cluster ID: %s", err)

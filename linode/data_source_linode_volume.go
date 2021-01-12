@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/linode/linodego"
 )
 
@@ -70,7 +70,7 @@ func dataSourceLinodeVolume() *schema.Resource {
 }
 
 func dataSourceLinodeVolumeRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	requestedVolumeID := d.Get("id").(int)
 
 	if requestedVolumeID == 0 {

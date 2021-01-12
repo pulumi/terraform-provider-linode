@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/linode/linodego"
 )
 
@@ -137,16 +137,16 @@ func resourceLinodeNodeBalancerConfig() *schema.Resource {
 				Sensitive:   true,
 			},
 			"node_status": {
-				Type:     schema.TypeMap,
+				Type:     schema.TypeList,
 				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"status_up": {
+						"up": {
 							Type:        schema.TypeInt,
 							Description: "The number of backends considered to be 'UP' and healthy, and that are serving requests.",
 							Computed:    true,
 						},
-						"status_down": {
+						"down": {
 							Type:        schema.TypeInt,
 							Description: "The number of backends considered to be 'DOWN' and unhealthy. These are not in rotation, and not serving requests.",
 							Computed:    true,
@@ -188,7 +188,7 @@ func resourceLinodeNodeBalancerConfigImport(d *schema.ResourceData, meta interfa
 }
 
 func resourceLinodeNodeBalancerConfigRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode NodeBalancerConfig ID %s as int: %s", d.Id(), err)
@@ -224,21 +224,16 @@ func resourceLinodeNodeBalancerConfigRead(d *schema.ResourceData, meta interface
 	d.Set("ssl_key", config.SSLKey)
 	d.Set("ssl_fingerprint", config.SSLFingerprint)
 	d.Set("ssl_commonname", config.SSLCommonName)
-
-	nodeStatus := map[string]interface{}{
-		"up":   fmt.Sprintf("%d", config.NodesStatus.Up),
-		"down": fmt.Sprintf("%d", config.NodesStatus.Down),
-	}
-	d.Set("node_status", nodeStatus)
+	d.Set("node_status", []map[string]interface{}{{
+		"up":   config.NodesStatus.Up,
+		"down": config.NodesStatus.Down,
+	}})
 
 	return nil
 }
 
 func resourceLinodeNodeBalancerConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	client, ok := meta.(linodego.Client)
-	if !ok {
-		return fmt.Errorf("Invalid Client when creating Linode NodeBalancerConfig")
-	}
+	client := meta.(*ProviderMeta).Client
 
 	nodebalancerID := d.Get("nodebalancer_id").(int)
 
@@ -274,7 +269,7 @@ func resourceLinodeNodeBalancerConfigCreate(d *schema.ResourceData, meta interfa
 }
 
 func resourceLinodeNodeBalancerConfigUpdate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode NodeBalancerConfig ID %s as int: %s", d.Id(), err)
@@ -313,7 +308,7 @@ func resourceLinodeNodeBalancerConfigUpdate(d *schema.ResourceData, meta interfa
 }
 
 func resourceLinodeNodeBalancerConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing Linode NodeBalancerConfig ID %s as int: %s", d.Id(), err)

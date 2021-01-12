@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/linode/linodego"
 )
 
@@ -79,7 +79,7 @@ func dataSourceLinodeDomainRecord() *schema.Resource {
 }
 
 func dataSourceLinodeDomainRecordRead(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(linodego.Client)
+	client := meta.(*ProviderMeta).Client
 
 	domainID := d.Get("domain_id").(int)
 	recordName := d.Get("name").(string)

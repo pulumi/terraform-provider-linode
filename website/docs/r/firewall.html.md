@@ -8,7 +8,7 @@ description: |-
 
 # linode\_firewall
 
-~> **NOTICE:** The Firewall feature is currently available through early access. 
+~> **NOTICE:** The Firewall feature is currently available through early access.
 
 Manages a Linode Firewall.
 
@@ -22,13 +22,15 @@ resource "linode_firewall" "my_firewall" {
   inbound {
     protocol  = "TCP"
     ports     = ["80"]
-    addresses = ["0.0.0.0/0"]
+    ipv4 = ["0.0.0.0/0"]
+    ipv6 = ["ff00::/8"]
   }
 
   outbound {
     protocol  = "TCP"
     ports     = ["80"]
-    addresses = ["0.0.0.0/0"]
+    ipv4 = ["0.0.0.0/0"]
+    ipv6 = ["ff00::/8"]
   }
 
   linodes = [linode_instance.my_instance.id]
@@ -56,7 +58,7 @@ The following arguments are supported:
 
 * [`outbound`](#outbound) - (Optional) A firewall rule that specifies what outbound network traffic is allowed.
 
-* `linodes` - (Required) A list of IDs of Linodes this Firewall should govern it's network traffic for.
+* `linodes` - (Optional) A list of IDs of Linodes this Firewall should govern it's network traffic for.
 
 * `tags` - (Optional) A list of tags applied to the Kubernetes cluster. Tags are for organizational purposes only.
 
@@ -68,7 +70,9 @@ The following arguments are supported in the inbound rule block:
 
 * `protocol` - (Required) The network protocol this rule controls.
 
-* `addresses` - (Required) A list of IP addresses, CIDR blocks, or 0.0.0.0/0 (to allow all) this rule applies to.
+* `ipv4` - (Optional) A list of IP addresses, CIDR blocks, or 0.0.0.0/0 (to allow all) this rule applies to.
+
+* `ipv6` - (Optional) A list of IPv6 addresses or networks this rule applies to.
 
 ### outbound
 
@@ -78,7 +82,9 @@ The following arguments are supported in the outbound rule block:
 
 * `protocol` - (Required) The network protocol this rule controls.
 
-* `addresses` - (Required) A list of IP addresses, CIDR blocks, or `0.0.0.0/0` (to allow all) this rule applies to.
+* `ipv4` - (Optional) A list of IP addresses, CIDR blocks, or `0.0.0.0/0` (to allow all) this rule applies to.
+
+* `ipv6` - (Optional) A list of IPv6 addresses or networks this rule applies to.
 
 ## Attributes Reference
 

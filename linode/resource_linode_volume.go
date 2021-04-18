@@ -62,9 +62,10 @@ func resourceLinodeVolume() *schema.Resource {
 				Computed:    true,
 			},
 			"filesystem_path": {
-				Type:        schema.TypeString,
-				Description: "The full filesystem path for the Volume based on the Volume's label. Path is /dev/disk/by-id/scsi-0Linode_Volume_ + Volume label.",
-				Computed:    true,
+				Type: schema.TypeString,
+				Description: "The full filesystem path for the Volume based on the Volume's label. Path is " +
+					"/dev/disk/by-id/scsi-0Linode_Volume_ + Volume label.",
+				Computed: true,
 			},
 			"tags": {
 				Type:        schema.TypeSet,
@@ -106,7 +107,6 @@ func resourceLinodeVolumeRead(d *schema.ResourceData, meta interface{}) error {
 
 func resourceLinodeVolumeCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*ProviderMeta).Client
-	d.Partial(true)
 
 	var linodeID *int
 
@@ -136,23 +136,24 @@ func resourceLinodeVolumeCreate(d *schema.ResourceData, meta interface{}) error 
 	d.SetId(fmt.Sprintf("%d", volume.ID))
 
 	if createOpts.LinodeID > 0 {
-		if _, err := client.WaitForVolumeLinodeID(context.Background(), volume.ID, linodeID, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+		if _, err := client.WaitForVolumeLinodeID(
+			context.Background(), volume.ID, linodeID, int(d.Timeout(schema.TimeoutUpdate).Seconds()),
+		); err != nil {
 			return err
 		}
 	}
 
-	if _, err = client.WaitForVolumeStatus(context.Background(), volume.ID, linodego.VolumeActive, int(d.Timeout(schema.TimeoutCreate).Seconds())); err != nil {
+	if _, err = client.WaitForVolumeStatus(
+		context.Background(), volume.ID, linodego.VolumeActive, int(d.Timeout(schema.TimeoutCreate).Seconds()),
+	); err != nil {
 		return err
 	}
-
-	d.Partial(false)
 
 	return resourceLinodeVolumeRead(d, meta)
 }
 
 func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*ProviderMeta).Client
-	d.Partial(true)
 
 	id, err := strconv.ParseInt(d.Id(), 10, 64)
 	if err != nil {
@@ -170,7 +171,9 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 			return err
 		}
 
-		if _, err = client.WaitForVolumeStatus(context.Background(), volume.ID, linodego.VolumeActive, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+		if _, err = client.WaitForVolumeStatus(
+			context.Background(), volume.ID, linodego.VolumeActive, int(d.Timeout(schema.TimeoutUpdate).Seconds()),
+		); err != nil {
 			return err
 		}
 
@@ -220,7 +223,9 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 			}
 
 			log.Printf("[INFO] Waiting for Linode Volume %d to detach ...", volume.ID)
-			if _, err = client.WaitForVolumeLinodeID(context.Background(), volume.ID, nil, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+			if _, err = client.WaitForVolumeLinodeID(
+				context.Background(), volume.ID, nil, int(d.Timeout(schema.TimeoutUpdate).Seconds()),
+			); err != nil {
 				return err
 			}
 		}
@@ -238,14 +243,15 @@ func resourceLinodeVolumeUpdate(d *schema.ResourceData, meta interface{}) error 
 			}
 
 			log.Printf("[INFO] Waiting for Linode Volume %d to attach ...", volume.ID)
-			if _, err = client.WaitForVolumeLinodeID(context.Background(), volume.ID, linodeID, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+			if _, err = client.WaitForVolumeLinodeID(
+				context.Background(), volume.ID, linodeID, int(d.Timeout(schema.TimeoutUpdate).Seconds()),
+			); err != nil {
 				return err
 			}
 		}
 
 		d.Set("linode_id", linodeID)
 	}
-	d.Partial(false)
 
 	return resourceLinodeVolumeRead(d, meta)
 }
@@ -264,7 +270,9 @@ func resourceLinodeVolumeDelete(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	log.Printf("[INFO] Waiting for Linode Volume %d to detach ...", id)
-	if _, err := client.WaitForVolumeLinodeID(context.Background(), id, nil, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+	if _, err := client.WaitForVolumeLinodeID(
+		context.Background(), id, nil, int(d.Timeout(schema.TimeoutUpdate).Seconds()),
+	); err != nil {
 		return err
 	}
 

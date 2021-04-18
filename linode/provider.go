@@ -56,16 +56,45 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Description: "Maximum delay in milliseconds before retrying a request.",
 			},
+
+			"event_poll_ms": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("LINODE_EVENT_POLL_MS", 300),
+				Description: "The rate in milliseconds to poll for events.",
+			},
+
+			"lke_event_poll_ms": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     300,
+				Description: "The rate in milliseconds to poll for LKE events.",
+			},
+
+			"lke_node_ready_poll_ms": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     500,
+				Description: "The rate in milliseconds to poll for an LKE node to be ready.",
+			},
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
 			"linode_account":                dataSourceLinodeAccount(),
 			"linode_domain":                 dataSourceLinodeDomain(),
 			"linode_domain_record":          dataSourceLinodeDomainRecord(),
+			"linode_firewall":               dataSourceLinodeFirewall(),
 			"linode_image":                  dataSourceLinodeImage(),
+			"linode_images":                 dataSourceLinodeImages(),
+			"linode_instances":              dataSourceLinodeInstances(),
+			"linode_instance_backups":       dataSourceLinodeInstanceBackups(),
 			"linode_instance_type":          dataSourceLinodeInstanceType(),
+			"linode_kernel":                 dataSourceLinodeKernel(),
 			"linode_lke_cluster":            dataSourceLinodeLKECluster(),
 			"linode_networking_ip":          dataSourceLinodeNetworkingIP(),
+			"linode_nodebalancer":           dataSourceLinodeNodeBalancer(),
+			"linode_nodebalancer_config":    dataSourceLinodeNodeBalancerConfig(),
+			"linode_nodebalancer_node":      dataSourceLinodeNodeBalancerNode(),
 			"linode_object_storage_cluster": dataSourceLinodeObjectStorageCluster(),
 			"linode_profile":                dataSourceLinodeProfile(),
 			"linode_region":                 dataSourceLinodeRegion(),
@@ -127,6 +156,11 @@ func providerConfigure(d *schema.ResourceData, terraformVersion string) (interfa
 
 		MinRetryDelayMilliseconds: d.Get("min_retry_delay_ms").(int),
 		MaxRetryDelayMilliseconds: d.Get("max_retry_delay_ms").(int),
+
+		EventPollMilliseconds:    d.Get("event_poll_ms").(int),
+		LKEEventPollMilliseconds: d.Get("lke_event_poll_ms").(int),
+
+		LKENodeReadyPollMilliseconds: d.Get("lke_node_ready_poll_ms").(int),
 	}
 	config.terraformVersion = terraformVersion
 	client := config.Client()

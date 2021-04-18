@@ -12,6 +12,28 @@ import (
 	"github.com/linode/linodego"
 )
 
+func resourceLinodeNodeBalancerTransfer() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"in": {
+				Type:        schema.TypeFloat,
+				Description: "The total transfer, in MB, used by this NodeBalancer this month",
+				Computed:    true,
+			},
+			"out": {
+				Type:        schema.TypeFloat,
+				Description: "The total inbound transfer, in MB, used for this NodeBalancer this month",
+				Computed:    true,
+			},
+			"total": {
+				Type:        schema.TypeFloat,
+				Description: "The total outbound transfer, in MB, used for this NodeBalancer this month",
+				Computed:    true,
+			},
+		},
+	}
+}
+
 func resourceLinodeNodeBalancer() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceLinodeNodeBalancerCreate,
@@ -67,25 +89,7 @@ func resourceLinodeNodeBalancer() *schema.Resource {
 			"transfer": {
 				Type:     schema.TypeList,
 				Computed: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"in": {
-							Type:        schema.TypeFloat,
-							Description: "The total transfer, in MB, used by this NodeBalancer this month",
-							Computed:    true,
-						},
-						"out": {
-							Type:        schema.TypeFloat,
-							Description: "The total inbound transfer, in MB, used for this NodeBalancer this month",
-							Computed:    true,
-						},
-						"total": {
-							Type:        schema.TypeFloat,
-							Description: "The total outbound transfer, in MB, used for this NodeBalancer this month",
-							Computed:    true,
-						},
-					},
-				},
+				Elem:     resourceLinodeNodeBalancerTransfer(),
 			},
 			"tags": {
 				Type:        schema.TypeSet,
@@ -172,7 +176,7 @@ func resourceLinodeNodeBalancerUpdate(d *schema.ResourceData, meta interface{}) 
 		return fmt.Errorf("Error fetching data about the current NodeBalancer: %s", err)
 	}
 
-	if d.HasChange("label") || d.HasChange("client_conn_throttle") || d.HasChange("tags") {
+	if d.HasChanges("label", "client_conn_throttle", "tags") {
 		label := d.Get("label").(string)
 		clientConnThrottle := d.Get("client_conn_throttle").(int)
 

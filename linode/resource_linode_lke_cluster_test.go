@@ -215,7 +215,7 @@ func TestAccLinodeLKECluster_basic(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(testLKEClusterResName, "label", clusterName),
 					resource.TestCheckResourceAttr(testLKEClusterResName, "region", "us-central"),
-					resource.TestCheckResourceAttr(testLKEClusterResName, "k8s_version", "1.17"),
+					resource.TestCheckResourceAttr(testLKEClusterResName, "k8s_version", "1.20"),
 					resource.TestCheckResourceAttr(testLKEClusterResName, "status", "ready"),
 					resource.TestCheckResourceAttr(testLKEClusterResName, "tags.#", "1"),
 					resource.TestCheckResourceAttr(testLKEClusterResName, "pool.#", "1"),
@@ -225,6 +225,35 @@ func TestAccLinodeLKECluster_basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testLKEClusterResName, "id"),
 					resource.TestCheckResourceAttrSet(testLKEClusterResName, "pool.0.id"),
 					resource.TestCheckResourceAttrSet(testLKEClusterResName, "kubeconfig"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLinodeLKECluster_k8sUpgrade(t *testing.T) {
+	t.Parallel()
+
+	clusterName := acctest.RandomWithPrefix("tf_test")
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLinodeLKEClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckLinodeLKEClusterManyPools(clusterName, "1.19"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(testLKEClusterResName, "label", clusterName),
+					resource.TestCheckResourceAttr(testLKEClusterResName, "region", "us-central"),
+					resource.TestCheckResourceAttr(testLKEClusterResName, "k8s_version", "1.19"),
+				),
+			},
+			{
+				Config: testAccCheckLinodeLKEClusterManyPools(clusterName, "1.20"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(testLKEClusterResName, "label", clusterName),
+					resource.TestCheckResourceAttr(testLKEClusterResName, "region", "us-central"),
+					resource.TestCheckResourceAttr(testLKEClusterResName, "k8s_version", "1.20"),
 				),
 			},
 		},
@@ -353,7 +382,7 @@ func testAccCheckLinodeLKEClusterBasic(name string) string {
 resource "linode_lke_cluster" "test" {
 	label       = "%s"
 	region      = "us-central"
-	k8s_version = "1.17"
+	k8s_version = "1.20"
 	tags        = ["test"]
 
 	pool {
@@ -363,12 +392,37 @@ resource "linode_lke_cluster" "test" {
 }`, name)
 }
 
+func testAccCheckLinodeLKEClusterManyPools(name, k8sVersion string) string {
+	return fmt.Sprintf(`
+resource "linode_lke_cluster" "test" {
+	label       = "%s"
+	region      = "us-central"
+	k8s_version = "%s"
+	tags        = ["test"]
+
+	pool {
+		type  = "g6-standard-2"
+		count = 3
+	}
+
+	pool {
+		type = "g6-standard-2"
+		count = 1
+	}
+
+	pool {
+		type = "g6-standard-2"
+		count = 1
+	}
+}`, name, k8sVersion)
+}
+
 func testAccCheckLinodeLKEClusterBasicUpdates(name string) string {
 	return fmt.Sprintf(`
 resource "linode_lke_cluster" "test" {
 	label       = "%s"
 	region      = "us-central"
-	k8s_version = "1.17"
+	k8s_version = "1.20"
 	tags        = ["test", "new_tag"]
 
 	pool {
@@ -383,7 +437,7 @@ func testAccCheckLinodeLKEClusterComplexPools(name string) string {
 resource "linode_lke_cluster" "test" {
 	label       = "%s"
 	region      = "us-central"
-	k8s_version = "1.17"
+	k8s_version = "1.20"
 	tags        = ["test"]
 
 	pool {

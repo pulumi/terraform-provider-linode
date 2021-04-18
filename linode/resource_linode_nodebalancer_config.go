@@ -12,6 +12,24 @@ import (
 	"github.com/linode/linodego"
 )
 
+func resourceLinodeNodeBalancerConfigNodeStatus() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"up": {
+				Type:        schema.TypeInt,
+				Description: "The number of backends considered to be 'UP' and healthy, and that are serving requests.",
+				Computed:    true,
+			},
+			"down": {
+				Type: schema.TypeInt,
+				Description: "The number of backends considered to be 'DOWN' and unhealthy. These are not in " +
+					"rotation, and not serving requests.",
+				Computed: true,
+			},
+		},
+	}
+}
+
 func resourceLinodeNodeBalancerConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceLinodeNodeBalancerConfigCreate,
@@ -29,22 +47,30 @@ func resourceLinodeNodeBalancerConfig() *schema.Resource {
 				ForceNew:    true,
 			},
 			"protocol": {
-				Type:         schema.TypeString,
-				Description:  "The protocol this port is configured to serve. If this is set to https you must include an ssl_cert and an ssl_key.",
-				ValidateFunc: validation.StringInSlice([]string{"http", "https", "tcp"}, false),
-				Optional:     true,
-				Default:      linodego.ProtocolHTTP,
+				Type: schema.TypeString,
+				Description: "The protocol this port is configured to serve. If this is set to https you must " +
+					"include an ssl_cert and an ssl_key.",
+				StateFunc: func(val interface{}) string {
+					return strings.ToLower(val.(string))
+				},
+				Optional: true,
+				Default:  linodego.ProtocolHTTP,
 			},
 			"proxy_protocol": {
-				Type:         schema.TypeString,
-				Description:  "The version of ProxyProtocol to use for the underlying NodeBalancer. This requires protocol to be `tcp`. Valid values are `none`, `v1`, and `v2`.",
+				Type: schema.TypeString,
+				Description: "The version of ProxyProtocol to use for the underlying NodeBalancer. " +
+					"This requires protocol to be `tcp`. Valid values are `none`, `v1`, and `v2`.",
 				ValidateFunc: validation.StringInSlice([]string{"none", "v1", "v2"}, false),
 				Optional:     true,
 				Default:      linodego.ProxyProtocolNone,
 			},
 			"port": {
-				Type:         schema.TypeInt,
-				Description:  "The TCP port this Config is for. These values must be unique across configs on a single NodeBalancer (you can't have two configs for port 80, for example). While some ports imply some protocols, no enforcement is done and you may configure your NodeBalancer however is useful to you. For example, while port 443 is generally used for HTTPS, you do not need SSL configured to have a NodeBalancer listening on port 443.",
+				Type: schema.TypeInt,
+				Description: "The TCP port this Config is for. These values must be unique across configs on a " +
+					"single NodeBalancer (you can't have two configs for port 80, for example). While some ports imply " +
+					"some protocols, no enforcement is done and you may configure your NodeBalancer however is useful to " +
+					"you. For example, while port 443 is generally used for HTTPS, you do not need SSL configured to have " +
+					"a NodeBalancer listening on port 443.",
 				ValidateFunc: validation.IntBetween(1, 65535),
 				Optional:     true,
 				Default:      80,
@@ -70,8 +96,9 @@ func resourceLinodeNodeBalancerConfig() *schema.Resource {
 				Computed:     true,
 			},
 			"algorithm": {
-				Type:         schema.TypeString,
-				Description:  "What algorithm this NodeBalancer should use for routing traffic to backends: roundrobin, leastconn, source",
+				Type: schema.TypeString,
+				Description: "What algorithm this NodeBalancer should use for routing traffic to backends: roundrobin, " +
+					"leastconn, source",
 				ValidateFunc: validation.StringInSlice([]string{"roundrobin", "leastconn", "source"}, false),
 				Optional:     true,
 				Computed:     true,
@@ -84,75 +111,77 @@ func resourceLinodeNodeBalancerConfig() *schema.Resource {
 				Computed:     true,
 			},
 			"check": {
-				Type:         schema.TypeString,
-				Description:  "The type of check to perform against backends to ensure they are serving requests. This is used to determine if backends are up or down. If none no check is performed. connection requires only a connection to the backend to succeed. http and http_body rely on the backend serving HTTP, and that the response returned matches what is expected.",
+				Type: schema.TypeString,
+				Description: "The type of check to perform against backends to ensure they are serving requests. This is used " +
+					"to determine if backends are up or down. If none no check is performed. connection requires only a connection " +
+					"to the backend to succeed. http and http_body rely on the backend serving HTTP, and that the response returned " +
+					"matches what is expected.",
 				ValidateFunc: validation.StringInSlice([]string{"none", "connection", "http", "http_body"}, false),
 				Optional:     true,
 				Computed:     true,
 			},
 			"check_path": {
-				Type:        schema.TypeString,
-				Description: "The URL path to check on each backend. If the backend does not respond to this request it is considered to be down.",
-				Optional:    true,
-				Computed:    true,
+				Type: schema.TypeString,
+				Description: "The URL path to check on each backend. If the backend does not respond to this request it is " +
+					"considered to be down.",
+				Optional: true,
+				Computed: true,
 			},
 			"check_body": {
-				Type:        schema.TypeString,
-				Description: "This value must be present in the response body of the check in order for it to pass. If this value is not present in the response body of a check request, the backend is considered to be down",
-				Optional:    true,
-				Computed:    true,
+				Type: schema.TypeString,
+				Description: "This value must be present in the response body of the check in order for it to pass. " +
+					"If this value is not present in the response body of a check request, the backend is considered to be down",
+				Optional: true,
+				Computed: true,
 			},
 			"check_passive": {
-				Type:        schema.TypeBool,
-				Description: "If true, any response from this backend with a 5xx status code will be enough for it to be considered unhealthy and taken out of rotation.",
-				Optional:    true,
-				Computed:    true,
+				Type: schema.TypeBool,
+				Description: "If true, any response from this backend with a 5xx status code will be enough for it to " +
+					"be considered unhealthy and taken out of rotation.",
+				Optional: true,
+				Computed: true,
 			},
 			"cipher_suite": {
-				Type:         schema.TypeString,
-				Description:  "What ciphers to use for SSL connections served by this NodeBalancer. `legacy` is considered insecure and should only be used if necessary.",
+				Type: schema.TypeString,
+				Description: "What ciphers to use for SSL connections served by this NodeBalancer. `legacy` is " +
+					"considered insecure and should only be used if necessary.",
 				ValidateFunc: validation.StringInSlice([]string{"recommended", "legacy"}, false),
 				Optional:     true,
 				Computed:     true,
 			},
 			"ssl_commonname": {
-				Type:        schema.TypeString,
-				Description: "The common name for the SSL certification this port is serving if this port is not configured to use SSL.",
-				Computed:    true,
+				Type: schema.TypeString,
+				Description: "The read-only common name automatically derived from the SSL certificate assigned to this " +
+					"NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned " +
+					"to your NodeBalancerConfig.",
+				Computed: true,
 			},
 			"ssl_fingerprint": {
-				Type:        schema.TypeString,
-				Description: "The fingerprint for the SSL certification this port is serving if this port is not configured to use SSL.",
-				Computed:    true,
+				Type: schema.TypeString,
+				Description: "The read-only fingerprint automatically derived from the SSL certificate assigned to this " +
+					"NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned to " +
+					"your NodeBalancerConfig.",
+				Computed: true,
 			},
 			"ssl_cert": {
-				Type:        schema.TypeString,
-				Description: "The certificate this port is serving. This is not returned. If set, this field will come back as `<REDACTED>`. Please use the ssl_commonname and ssl_fingerprint to identify the certificate.",
-				Optional:    true,
+				Type: schema.TypeString,
+				Description: "The certificate this port is serving. This is not returned. If set, this field will come " +
+					"back as `<REDACTED>`. Please use the ssl_commonname and ssl_fingerprint to identify the certificate.",
+				Optional:  true,
+				Sensitive: true,
 			},
 			"ssl_key": {
-				Type:        schema.TypeString,
-				Description: "The private key corresponding to this port's certificate. This is not returned. If set, this field will come back as `<REDACTED>`. Please use the ssl_commonname and ssl_fingerprint to identify the certificate.",
-				Optional:    true,
-				Sensitive:   true,
+				Type: schema.TypeString,
+				Description: "The private key corresponding to this port's certificate. This is not returned. If set, this " +
+					"field will come back as `<REDACTED>`. Please use the ssl_commonname and ssl_fingerprint to identify " +
+					"the certificate.",
+				Optional:  true,
+				Sensitive: true,
 			},
 			"node_status": {
 				Type:     schema.TypeList,
 				Computed: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"up": {
-							Type:        schema.TypeInt,
-							Description: "The number of backends considered to be 'UP' and healthy, and that are serving requests.",
-							Computed:    true,
-						},
-						"down": {
-							Type:        schema.TypeInt,
-							Description: "The number of backends considered to be 'DOWN' and unhealthy. These are not in rotation, and not serving requests.",
-							Computed:    true,
-						},
-					},
-				},
+				Elem:     resourceLinodeNodeBalancerConfigNodeStatus(),
 			},
 		},
 	}
@@ -221,7 +250,6 @@ func resourceLinodeNodeBalancerConfigRead(d *schema.ResourceData, meta interface
 	d.Set("port", config.Port)
 	d.Set("protocol", config.Protocol)
 	d.Set("proxy_protocol", config.ProxyProtocol)
-	d.Set("ssl_key", config.SSLKey)
 	d.Set("ssl_fingerprint", config.SSLFingerprint)
 	d.Set("ssl_commonname", config.SSLCommonName)
 	d.Set("node_status", []map[string]interface{}{{
@@ -247,7 +275,7 @@ func resourceLinodeNodeBalancerConfigCreate(d *schema.ResourceData, meta interfa
 		CheckPath:     d.Get("check_path").(string),
 		CheckTimeout:  d.Get("check_timeout").(int),
 		Port:          d.Get("port").(int),
-		Protocol:      linodego.ConfigProtocol(d.Get("protocol").(string)),
+		Protocol:      linodego.ConfigProtocol(strings.ToLower(d.Get("protocol").(string))),
 		ProxyProtocol: linodego.ConfigProxyProtocol(d.Get("proxy_protocol").(string)),
 		SSLCert:       d.Get("ssl_cert").(string),
 		SSLKey:        d.Get("ssl_key").(string),
@@ -289,7 +317,7 @@ func resourceLinodeNodeBalancerConfigUpdate(d *schema.ResourceData, meta interfa
 		CheckPath:     d.Get("check_path").(string),
 		CheckTimeout:  d.Get("check_timeout").(int),
 		Port:          d.Get("port").(int),
-		Protocol:      linodego.ConfigProtocol(d.Get("protocol").(string)),
+		Protocol:      linodego.ConfigProtocol(strings.ToLower(d.Get("protocol").(string))),
 		ProxyProtocol: linodego.ConfigProxyProtocol(d.Get("proxy_protocol").(string)),
 		SSLCert:       d.Get("ssl_cert").(string),
 		SSLKey:        d.Get("ssl_key").(string),
@@ -300,7 +328,9 @@ func resourceLinodeNodeBalancerConfigUpdate(d *schema.ResourceData, meta interfa
 		updateOpts.CheckPassive = &checkPassive
 	}
 
-	if _, err = client.UpdateNodeBalancerConfig(context.Background(), int(nodebalancerID), int(id), updateOpts); err != nil {
+	if _, err = client.UpdateNodeBalancerConfig(
+		context.Background(), int(nodebalancerID), int(id), updateOpts,
+	); err != nil {
 		return fmt.Errorf("Error updating Nodebalancer %d Config %d: %s", int(nodebalancerID), int(id), err)
 	}
 

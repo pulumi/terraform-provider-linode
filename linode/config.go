@@ -29,9 +29,12 @@ type Config struct {
 
 	terraformVersion string
 
-	SkipInstanceReadyPoll     bool
-	MinRetryDelayMilliseconds int
-	MaxRetryDelayMilliseconds int
+	SkipInstanceReadyPoll        bool
+	MinRetryDelayMilliseconds    int
+	MaxRetryDelayMilliseconds    int
+	EventPollMilliseconds        int
+	LKEEventPollMilliseconds     int
+	LKENodeReadyPollMilliseconds int
 }
 
 // Client returns a fully initialized Linode client.
@@ -63,6 +66,9 @@ func (c *Config) Client() linodego.Client {
 		client.SetBaseURL(DefaultLinodeURL)
 	}
 
+	if c.EventPollMilliseconds != 0 {
+		client.SetPollDelay(time.Duration(c.EventPollMilliseconds))
+	}
 	if c.MinRetryDelayMilliseconds != 0 {
 		client.SetRetryWaitTime(time.Duration(c.MinRetryDelayMilliseconds) * time.Millisecond)
 	}
@@ -74,7 +80,8 @@ func (c *Config) Client() linodego.Client {
 }
 
 func terraformUserAgent(version string) string {
-	ua := fmt.Sprintf("HashiCorp Terraform/%s (+https://www.terraform.io) Terraform Plugin SDK/%s", version, meta.SDKVersionString())
+	ua := fmt.Sprintf("HashiCorp Terraform/%s (+https://www.terraform.io) Terraform Plugin SDK/%s",
+		version, meta.SDKVersionString())
 
 	if add := os.Getenv(uaEnvVar); add != "" {
 		add = strings.TrimSpace(add)

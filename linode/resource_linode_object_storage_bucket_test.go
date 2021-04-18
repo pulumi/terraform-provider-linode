@@ -9,15 +9,28 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
+	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/linode/linodego"
+)
+
+const (
+	objAccessKeyEnvVar = "LINODE_OBJ_ACCESS_KEY"
+	objSecretKeyEnvVar = "LINODE_OBJ_SECRET_KEY"
 )
 
 func init() {
@@ -88,14 +101,41 @@ func testSweepLinodeObjectStorageBucket(prefix string) error {
 	if err != nil {
 		return fmt.Errorf("Error getting object_storage_buckets: %s", err)
 	}
+
+	accessKey, accessKeyOk := os.LookupEnv(objAccessKeyEnvVar)
+	secretKey, secretKeyOk := os.LookupEnv(objSecretKeyEnvVar)
+	haveBucketAccess := accessKeyOk && secretKeyOk
+
 	for _, objectStorageBucket := range objectStorageBuckets {
 		if !shouldSweepAcceptanceTestResource(prefix, objectStorageBucket.Label) {
 			continue
 		}
-		err := client.DeleteObjectStorageBucket(context.Background(), objectStorageBucket.Cluster, objectStorageBucket.Label)
+		bucket := objectStorageBucket.Label
+
+		if haveBucketAccess {
+			conn := s3.New(session.New(&aws.Config{
+				Region:      aws.String("us-east-1"),
+				Credentials: credentials.NewStaticCredentials(accessKey, secretKey, ""),
+				Endpoint:    aws.String(fmt.Sprintf(linodeObjectsEndpoint, objectStorageBucket.Cluster)),
+			}))
+			iter := s3manager.NewDeleteListIterator(conn, &s3.ListObjectsInput{
+				Bucket: aws.String(bucket),
+			})
+			if err := s3manager.NewBatchDeleteWithClient(conn).Delete(aws.BackgroundContext(), iter); err != nil {
+				return fmt.Errorf("unable to delete objects from bucket (%s): %s", bucket, err)
+			}
+		}
+
+		err := client.DeleteObjectStorageBucket(context.Background(), objectStorageBucket.Cluster, bucket)
 
 		if err != nil {
-			return fmt.Errorf("Error destroying %s during sweep: %s", objectStorageBucket.Label, err)
+			if apiErr, ok := err.(*linodego.Error); ok && !haveBucketAccess && strings.HasPrefix(
+				apiErr.Message, fmt.Sprintf("Bucket %s is not empty", bucket)) {
+				log.Printf("[WARN] will not delete Object Storage Bucket (%s) as it needs to be emptied; "+
+					"specify %q and %q env variables for bucket access", bucket, objAccessKeyEnvVar, objSecretKeyEnvVar)
+				continue
+			}
+			return fmt.Errorf("Error destroying %s during sweep: %s", bucket, err)
 		}
 	}
 
@@ -124,6 +164,115 @@ func TestAccLinodeObjectStorageBucket_basic(t *testing.T) {
 				ResourceName:      resName,
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccLinodeObjectStorageBucket_access(t *testing.T) {
+	t.Parallel()
+
+	resName := "linode_object_storage_bucket.foobar"
+	objectStorageBucketName := acctest.RandomWithPrefix("tf-test")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLinodeObjectStorageBucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithAccess(objectStorageBucketName, "public-read", true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeObjectStorageBucketExists,
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "acl", "public-read"),
+					resource.TestCheckResourceAttr(resName, "cors_enabled", "true"),
+				),
+			},
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithAccess(objectStorageBucketName, "private", false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeObjectStorageBucketExists,
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "acl", "private"),
+					resource.TestCheckResourceAttr(resName, "cors_enabled", "false"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLinodeObjectStorageBucket_versioning(t *testing.T) {
+	t.Parallel()
+
+	resName := "linode_object_storage_bucket.foobar"
+	objectStorageBucketName := acctest.RandomWithPrefix("tf-test")
+	objectStorageKeyName := acctest.RandomWithPrefix("tf-test")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLinodeObjectStorageBucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithVersioning(objectStorageBucketName, objectStorageKeyName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeObjectStorageBucketExists,
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "versioning", "true"),
+				),
+			},
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithVersioning(objectStorageBucketName, objectStorageKeyName, false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeObjectStorageBucketExists,
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "versioning", "false"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLinodeObjectStorageBucket_lifecycle(t *testing.T) {
+	t.Parallel()
+
+	resName := "linode_object_storage_bucket.foobar"
+	objectStorageBucketName := acctest.RandomWithPrefix("tf-test")
+	objectStorageKeyName := acctest.RandomWithPrefix("tf-test")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLinodeObjectStorageBucketDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithLifecycle(objectStorageBucketName, objectStorageKeyName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "cluster", "us-east-1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.#", "1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.id", "test-rule"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.prefix", "tf"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.enabled", "true"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.expiration.#", "1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.abort_incomplete_multipart_upload_days", "5"),
+					resource.TestCheckResourceAttrSet(resName, "lifecycle_rule.0.expiration.0.date"),
+				),
+			},
+			{
+				Config: testAccCheckLinodeObjectStorageBucketConfigWithLifecycleUpdates(objectStorageBucketName, objectStorageKeyName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resName, "label", objectStorageBucketName),
+					resource.TestCheckResourceAttr(resName, "cluster", "us-east-1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.#", "1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.id", "test-rule-update"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.prefix", "tf-update"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.enabled", "false"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.abort_incomplete_multipart_upload_days", "42"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.expiration.#", "1"),
+					resource.TestCheckResourceAttr(resName, "lifecycle_rule.0.expiration.0.days", "37"),
+				),
 			},
 		},
 	})
@@ -329,6 +478,17 @@ resource "linode_object_storage_bucket" "foobar" {
 }`, object_storage_bucket)
 }
 
+func testAccCheckLinodeObjectStorageBucketConfigWithAccess(object_storage_bucket, acl string, cors bool) string {
+	return fmt.Sprintf(`
+resource "linode_object_storage_bucket" "foobar" {
+	cluster = "us-east-1"
+	label = "%s"
+
+	acl = "%s"
+	cors_enabled = %t
+}`, object_storage_bucket, acl, cors)
+}
+
 func testAccCheckLinodeObjectStorageBucketConfigWithCert(object_storage_bucket, cert, key string) string {
 	return fmt.Sprintf(`
 resource "linode_object_storage_bucket" "foobar" {
@@ -344,6 +504,65 @@ EOF
 EOF
 	}
 }`, object_storage_bucket, cert, key)
+}
+
+func testAccCheckLinodeObjectStorageBucketConfigWithVersioning(bucketName, keyName string, versioning bool) string {
+	return testAccCheckLinodeObjectStorageKeyConfigBasic(keyName) + fmt.Sprintf(`
+resource "linode_object_storage_bucket" "foobar" {
+	access_key = linode_object_storage_key.foobar.access_key
+	secret_key = linode_object_storage_key.foobar.secret_key
+
+	cluster = "us-east-1"
+	label = "%s"
+
+	versioning = %t
+}`, bucketName, versioning)
+}
+
+func testAccCheckLinodeObjectStorageBucketConfigWithLifecycle(bucketName, keyName string) string {
+	return testAccCheckLinodeObjectStorageKeyConfigBasic(keyName) + fmt.Sprintf(`
+resource "linode_object_storage_bucket" "foobar" {
+	access_key = linode_object_storage_key.foobar.access_key
+	secret_key = linode_object_storage_key.foobar.secret_key
+
+	cluster = "us-east-1"
+	label = "%s"
+
+	lifecycle_rule {
+		id = "test-rule"
+		prefix = "tf"
+		enabled = true
+
+		abort_incomplete_multipart_upload_days = 5
+
+		expiration {
+			date = "2021-06-21"
+		}
+	}
+}`, bucketName)
+}
+
+func testAccCheckLinodeObjectStorageBucketConfigWithLifecycleUpdates(bucketName, keyName string) string {
+	return testAccCheckLinodeObjectStorageKeyConfigBasic(keyName) + fmt.Sprintf(`
+resource "linode_object_storage_bucket" "foobar" {
+	access_key = linode_object_storage_key.foobar.access_key
+	secret_key = linode_object_storage_key.foobar.secret_key
+
+	cluster = "us-east-1"
+	label = "%s"
+	
+	lifecycle_rule {
+		id = "test-rule-update"
+		prefix = "tf-update"
+		enabled = false
+
+		abort_incomplete_multipart_upload_days = 42
+
+		expiration {
+			days = 37
+		}
+	}
+}`, bucketName)
 }
 
 func testAccCheckLinodeObjectStorageBucketConfigUpdates(object_storage_bucket string) string {

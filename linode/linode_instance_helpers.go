@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/linode/linodego"
@@ -23,6 +24,15 @@ var (
 type flattenedProfileReferrals map[string]interface{}
 
 type diskSpec map[string]interface{}
+
+// getDeadlineSeconds gets the seconds remaining until deadline is met.
+func getDeadlineSeconds(ctx context.Context, d *schema.ResourceData) int {
+	duration := d.Timeout(schema.TimeoutUpdate)
+	if deadline, ok := ctx.Deadline(); ok {
+		duration = time.Until(deadline)
+	}
+	return int(duration.Seconds())
+}
 
 func flattenProfileReferrals(referrals linodego.ProfileReferrals) []flattenedProfileReferrals {
 	return []flattenedProfileReferrals{{
@@ -80,7 +90,10 @@ func flattenInstanceDisks(instanceDisks []linodego.InstanceDisk) (disks []map[st
 	return
 }
 
-func flattenInstanceConfigs(instanceConfigs []linodego.InstanceConfig, diskLabelIDMap map[int]string) (configs []map[string]interface{}) {
+func flattenInstanceConfigs(
+	instanceConfigs []linodego.InstanceConfig,
+	diskLabelIDMap map[int]string,
+) (configs []map[string]interface{}) {
 	for _, config := range instanceConfigs {
 
 		devices := []map[string]interface{}{{
@@ -118,7 +131,14 @@ func flattenInstanceConfigs(instanceConfigs []linodego.InstanceConfig, diskLabel
 	return
 }
 
-func createInstanceConfigsFromSet(client linodego.Client, instanceID int, cset []interface{}, diskIDLabelMap map[string]int, detacher volumeDetacher) (map[int]linodego.InstanceConfig, error) {
+func createInstanceConfigsFromSet(
+	ctx context.Context,
+	client linodego.Client,
+	instanceID int,
+	cset []interface{},
+	diskIDLabelMap map[string]int,
+	detacher volumeDetacher,
+) (map[int]linodego.InstanceConfig, error) {
 	configIDMap := make(map[int]linodego.InstanceConfig, len(cset))
 	for _, v := range cset {
 		config := v.(map[string]interface{})
@@ -170,11 +190,11 @@ func createInstanceConfigsFromSet(client linodego.Client, instanceID int, cset [
 			configOpts.Devices = *confDevices
 		}
 
-		if err := detachConfigVolumes(configOpts.Devices, detacher); err != nil {
+		if err := detachConfigVolumes(ctx, configOpts.Devices, detacher); err != nil {
 			return configIDMap, err
 		}
 
-		instanceConfig, err := client.CreateInstanceConfig(context.Background(), instanceID, configOpts)
+		instanceConfig, err := client.CreateInstanceConfig(ctx, instanceID, configOpts)
 		if err != nil {
 			return configIDMap, fmt.Errorf("Error creating Instance Config: %s", err)
 		}
@@ -183,20 +203,29 @@ func createInstanceConfigsFromSet(client linodego.Client, instanceID int, cset [
 	return configIDMap, nil
 }
 
-func updateInstanceConfigs(client linodego.Client, d *schema.ResourceData, instance linodego.Instance, tfConfigsOld, tfConfigsNew interface{}, diskIDLabelMap map[string]int) (bool, map[string]int, []*linodego.InstanceConfig, error) {
+func updateInstanceConfigs(
+	ctx context.Context,
+	client linodego.Client,
+	d *schema.ResourceData,
+	instance linodego.Instance,
+	tfConfigsOld, tfConfigsNew interface{},
+	diskIDLabelMap map[string]int,
+) (bool, map[string]int, []*linodego.InstanceConfig, error) {
 	var updatedConfigMap map[string]int
 	var rebootInstance bool
 	var updatedConfigs []*linodego.InstanceConfig
 
-	configs, err := client.ListInstanceConfigs(context.Background(), int(instance.ID), nil)
+	configs, err := client.ListInstanceConfigs(ctx, int(instance.ID), nil)
 	if err != nil {
-		return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf("Error fetching the config for Instance %d: %s", instance.ID, err)
+		return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf(
+			"Error fetching the config for Instance %d: %s", instance.ID, err)
 	}
 
 	configMap := make(map[string]linodego.InstanceConfig, len(configs))
 	for _, config := range configs {
 		if _, duplicate := configMap[config.Label]; duplicate {
-			return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf("Error indexing Instance %d Configs: Label '%s' is assigned to multiple configs", instance.ID, config.Label)
+			return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf(
+				"Error indexing Instance %d Configs: Label '%s' is assigned to multiple configs", instance.ID, config.Label)
 		}
 		configMap[config.Label] = config
 	}
@@ -256,21 +285,23 @@ func updateInstanceConfigs(client linodego.Client, d *schema.ResourceData, insta
 			if configUpdateOpts.Devices != nil {
 				detacher := makeVolumeDetacher(client, d)
 
-				if detachErr := detachConfigVolumes(*configUpdateOpts.Devices, detacher); detachErr != nil {
+				if detachErr := detachConfigVolumes(ctx, *configUpdateOpts.Devices, detacher); detachErr != nil {
 					return rebootInstance, updatedConfigMap, updatedConfigs, detachErr
 				}
 			}
 
-			updatedConfig, err := client.UpdateInstanceConfig(context.Background(), instance.ID, existingConfig.ID, configUpdateOpts)
+			updatedConfig, err := client.UpdateInstanceConfig(ctx, instance.ID, existingConfig.ID, configUpdateOpts)
 			if err != nil {
-				return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf("Error updating Instance %d Config %d: %s", instance.ID, existingConfig.ID, err)
+				return rebootInstance, updatedConfigMap, updatedConfigs, fmt.Errorf(
+					"Error updating Instance %d Config %d: %s", instance.ID, existingConfig.ID, err)
 			}
 
 			updatedConfigMap[updatedConfig.Label] = updatedConfig.ID
 		} else {
 			detacher := makeVolumeDetacher(client, d)
 
-			configIDMap, err := createInstanceConfigsFromSet(client, instance.ID, []interface{}{tfc}, diskIDLabelMap, detacher)
+			configIDMap, err := createInstanceConfigsFromSet(
+				ctx, client, instance.ID, []interface{}{tfc}, diskIDLabelMap, detacher)
 			if err != nil {
 				return rebootInstance, updatedConfigMap, updatedConfigs, err
 			}
@@ -281,7 +312,7 @@ func updateInstanceConfigs(client linodego.Client, d *schema.ResourceData, insta
 		}
 	}
 
-	updatedConfigMap, err = deleteInstanceConfigs(client, instance.ID, oldConfigLabels, updatedConfigMap, configMap)
+	updatedConfigMap, err = deleteInstanceConfigs(ctx, client, instance.ID, oldConfigLabels, updatedConfigMap, configMap)
 	if err != nil {
 		return rebootInstance, updatedConfigMap, updatedConfigs, err
 	}
@@ -289,11 +320,18 @@ func updateInstanceConfigs(client linodego.Client, d *schema.ResourceData, insta
 	return rebootInstance, updatedConfigMap, updatedConfigs, nil
 }
 
-func deleteInstanceConfigs(client linodego.Client, instanceID int, oldConfigLabels []string, newConfigLabels map[string]int, configMap map[string]linodego.InstanceConfig) (map[string]int, error) {
+func deleteInstanceConfigs(
+	ctx context.Context,
+	client linodego.Client,
+	instanceID int,
+	oldConfigLabels []string,
+	newConfigLabels map[string]int,
+	configMap map[string]linodego.InstanceConfig,
+) (map[string]int, error) {
 	for _, oldLabel := range oldConfigLabels {
 		if _, found := newConfigLabels[oldLabel]; !found {
 			if listedConfig, found := configMap[oldLabel]; found {
-				if err := client.DeleteInstanceConfig(context.Background(), instanceID, listedConfig.ID); err != nil {
+				if err := client.DeleteInstanceConfig(ctx, instanceID, listedConfig.ID); err != nil {
 					return newConfigLabels, err
 				}
 				delete(newConfigLabels, oldLabel)
@@ -303,7 +341,8 @@ func deleteInstanceConfigs(client linodego.Client, instanceID int, oldConfigLabe
 	return newConfigLabels, nil
 }
 
-func flattenInstanceConfigDevice(dev *linodego.InstanceConfigDevice, diskLabelIDMap map[int]string) []map[string]interface{} {
+func flattenInstanceConfigDevice(
+	dev *linodego.InstanceConfigDevice, diskLabelIDMap map[int]string) []map[string]interface{} {
 	if dev == nil || emptyInstanceConfigDevice(*dev) {
 		return nil
 	}
@@ -322,8 +361,10 @@ func flattenInstanceConfigDevice(dev *linodego.InstanceConfigDevice, diskLabelID
 	}}
 }
 
-// expandInstanceConfigDeviceMap converts a terraform linode_instance config.*.devices map to a InstanceConfigDeviceMap for the Linode API.
-func expandInstanceConfigDeviceMap(m map[string]interface{}, diskIDLabelMap map[string]int) (deviceMap *linodego.InstanceConfigDeviceMap, err error) {
+// expandInstanceConfigDeviceMap converts a terraform linode_instance config.*.devices map to a InstanceConfigDeviceMap
+// for the Linode API.
+func expandInstanceConfigDeviceMap(
+	m map[string]interface{}, diskIDLabelMap map[string]int) (deviceMap *linodego.InstanceConfigDeviceMap, err error) {
 	if len(m) == 0 {
 		return nil, nil
 	}
@@ -343,8 +384,13 @@ func expandInstanceConfigDeviceMap(m map[string]interface{}, diskIDLabelMap map[
 	return deviceMap, nil
 }
 
-// changeInstanceConfigDevice returns a copy of a config device map with the specified disk slot changed to the provided device.
-func changeInstanceConfigDevice(deviceMap linodego.InstanceConfigDeviceMap, namedSlot string, device *linodego.InstanceConfigDevice) linodego.InstanceConfigDeviceMap {
+// changeInstanceConfigDevice returns a copy of a config device map with the specified disk slot changed to the
+// provided device.
+func changeInstanceConfigDevice(
+	deviceMap linodego.InstanceConfigDeviceMap,
+	namedSlot string,
+	device *linodego.InstanceConfigDevice,
+) linodego.InstanceConfigDeviceMap {
 	tDevice := device
 	if tDevice != nil && emptyInstanceConfigDevice(*tDevice) {
 		tDevice = nil
@@ -401,7 +447,7 @@ func makeVolumeDetacher(client linodego.Client, d *schema.ResourceData) volumeDe
 		}
 
 		log.Printf("[INFO] Waiting for Linode Volume %d to detach ...", volumeID)
-		if _, err := client.WaitForVolumeLinodeID(ctx, volumeID, nil, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+		if _, err := client.WaitForVolumeLinodeID(ctx, volumeID, nil, getDeadlineSeconds(ctx, d)); err != nil {
 			return err
 		}
 		return nil
@@ -423,7 +469,13 @@ func expandInstanceConfigDevice(m map[string]interface{}) *linodego.InstanceConf
 	return dev
 }
 
-func createInstanceDisk(client linodego.Client, instance linodego.Instance, disk diskSpec, d *schema.ResourceData) (*linodego.InstanceDisk, error) {
+func createInstanceDisk(
+	ctx context.Context,
+	client linodego.Client,
+	instance linodego.Instance,
+	disk diskSpec,
+	d *schema.ResourceData,
+) (*linodego.InstanceDisk, error) {
 	diskOpts := linodego.InstanceDiskCreateOptions{
 		Label:      disk["label"].(string),
 		Filesystem: disk["filesystem"].(string),
@@ -471,12 +523,13 @@ func createInstanceDisk(client linodego.Client, instance linodego.Instance, disk
 		}
 	}
 
-	instanceDisk, err := client.CreateInstanceDisk(context.Background(), instance.ID, diskOpts)
+	instanceDisk, err := client.CreateInstanceDisk(ctx, instance.ID, diskOpts)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating Linode instance %d disk: %s", instance.ID, err)
 	}
 
-	_, err = client.WaitForEventFinished(context.Background(), instance.ID, linodego.EntityLinode, linodego.ActionDiskCreate, *instanceDisk.Created, int(d.Timeout(schema.TimeoutCreate).Seconds()))
+	_, err = client.WaitForEventFinished(ctx, instance.ID, linodego.EntityLinode,
+		linodego.ActionDiskCreate, *instanceDisk.Created, getDeadlineSeconds(ctx, d))
 	if err != nil {
 		return nil, fmt.Errorf("Error waiting for Linode instance %d disk: %s", instanceDisk.ID, err)
 	}
@@ -485,8 +538,9 @@ func createInstanceDisk(client linodego.Client, instance linodego.Instance, disk
 }
 
 // getInstanceDisks returns a map of disks for a given instance that is indexed by label.
-func getInstanceDisks(client linodego.Client, instanceID int) (map[string]linodego.InstanceDisk, error) {
-	disks, err := client.ListInstanceDisks(context.Background(), instanceID, nil)
+func getInstanceDisks(
+	ctx context.Context, client linodego.Client, instanceID int) (map[string]linodego.InstanceDisk, error) {
+	disks, err := client.ListInstanceDisks(ctx, instanceID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching the disks for Instance %d: %s", instanceID, err)
 	}
@@ -494,7 +548,8 @@ func getInstanceDisks(client linodego.Client, instanceID int) (map[string]linode
 	diskMap := make(map[string]linodego.InstanceDisk)
 	for _, disk := range disks {
 		if _, duplicate := diskMap[disk.Label]; duplicate {
-			return nil, fmt.Errorf("Error indexing Instance %d Disks: Label '%s' is assigned to multiple disks", instanceID, disk.Label)
+			return nil, fmt.Errorf("Error indexing Instance %d Disks: Label '%s' is assigned to multiple disks",
+				instanceID, disk.Label)
 		}
 		diskMap[disk.Label] = disk
 	}
@@ -502,9 +557,10 @@ func getInstanceDisks(client linodego.Client, instanceID int) (map[string]linode
 }
 
 // getInstanceDiskLabelIDMap returns a map of an instances disk labels to their corresponding IDs.
-func getInstanceDiskLabelIDMap(client linodego.Client, d *schema.ResourceData, instanceID int) (map[string]int, error) {
+func getInstanceDiskLabelIDMap(
+	ctx context.Context, client linodego.Client, d *schema.ResourceData, instanceID int) (map[string]int, error) {
 	diskSpecs := d.Get("disk").([]interface{})
-	disks, err := getInstanceDisks(client, instanceID)
+	disks, err := getInstanceDisks(ctx, client, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -541,7 +597,8 @@ func getInstanceDiskSpecChange(d *schema.ResourceData) (oldDiskSpecs, newDiskSpe
 }
 
 // getInstanceDiskSpecDiffs sorts the disk specs by added, removed, and existing.
-func getInstanceDiskSpecDiffs(oldDiskSpecs, newDiskSpecs map[string]diskSpec) (added, removed, existing map[string]diskSpec) {
+func getInstanceDiskSpecDiffs(
+	oldDiskSpecs, newDiskSpecs map[string]diskSpec) (added, removed, existing map[string]diskSpec) {
 	added = make(map[string]diskSpec)
 	removed = make(map[string]diskSpec)
 	existing = make(map[string]diskSpec)
@@ -570,10 +627,11 @@ func getInstanceDiskSpecDiffs(oldDiskSpecs, newDiskSpecs map[string]diskSpec) (a
 //
 // This function will also warn when there are disks attached to an instance which are not managed by
 // terraform.
-func updateInstanceDisks(client linodego.Client, d *schema.ResourceData, instance linodego.Instance) (bool, error) {
+func updateInstanceDisks(
+	ctx context.Context, client linodego.Client, d *schema.ResourceData, instance linodego.Instance) (bool, error) {
 	oldDisk, newDisk := getInstanceDiskSpecChange(d)
 	added, removed, existing := getInstanceDiskSpecDiffs(oldDisk, newDisk)
-	disks, err := getInstanceDisks(client, instance.ID)
+	disks, err := getInstanceDisks(ctx, client, instance.ID)
 	if err != nil {
 		return false, err
 	}
@@ -596,11 +654,11 @@ func updateInstanceDisks(client linodego.Client, d *schema.ResourceData, instanc
 			// It's ok if a removed disk is not found
 			continue
 		}
-		if err := client.DeleteInstanceDisk(context.Background(), instance.ID, disk.ID); err != nil {
+		if err := client.DeleteInstanceDisk(ctx, instance.ID, disk.ID); err != nil {
 			return hasChanges, err
 		}
-		_, err = client.WaitForEventFinished(context.Background(), instance.ID, linodego.EntityLinode,
-			linodego.ActionDiskDelete, *instance.Created, int(d.Timeout(schema.TimeoutUpdate).Seconds()))
+		_, err = client.WaitForEventFinished(ctx, instance.ID, linodego.EntityLinode,
+			linodego.ActionDiskDelete, *instance.Created, getDeadlineSeconds(ctx, d))
 		if err != nil {
 			return hasChanges, fmt.Errorf(
 				"error waiting for Instance %d Disk %d to finish deleting: %s", instance.ID, disk.ID, err)
@@ -614,7 +672,7 @@ func updateInstanceDisks(client linodego.Client, d *schema.ResourceData, instanc
 		// The only non-destructive change supported is resize.
 		// Label renames are not supported because this TF provider relies on the label as an identifier.
 		if spec["size"].(int) != existingDisk.Size {
-			if err := changeInstanceDiskSize(&client, instance, existingDisk, spec["size"].(int), d); err != nil {
+			if err := changeInstanceDiskSize(ctx, &client, instance, existingDisk, spec["size"].(int), d); err != nil {
 				return hasChanges, err
 			}
 			hasChanges = true
@@ -627,7 +685,7 @@ func updateInstanceDisks(client linodego.Client, d *schema.ResourceData, instanc
 
 	// create disks staged for creation
 	for _, spec := range added {
-		if _, err := createInstanceDisk(client, instance, spec, d); err != nil {
+		if _, err := createInstanceDisk(ctx, client, instance, spec, d); err != nil {
 			return hasChanges, err
 		}
 	}
@@ -670,26 +728,33 @@ func createRandomRootPassword() (string, error) {
 }
 
 // ensureInstanceOffline ensures that a given instance is offline.
-func ensureInstanceOffline(client *linodego.Client, instanceID, timeout int) (instance *linodego.Instance, err error) {
-	if instance, err = client.GetInstance(context.Background(), instanceID); err != nil {
+func ensureInstanceOffline(
+	ctx context.Context, client *linodego.Client, instanceID, timeout int) (instance *linodego.Instance, err error) {
+	if instance, err = client.GetInstance(ctx, instanceID); err != nil {
 		return
 	}
 
 	if instance.Status == linodego.InstanceOffline {
 		return
 	} else if instance.Status != linodego.InstanceShuttingDown {
-		err = client.ShutdownInstance(context.Background(), instanceID)
+		err = client.ShutdownInstance(ctx, instanceID)
 	}
 
 	if err != nil {
 		return
 	}
-	return client.WaitForInstanceStatus(context.Background(), instanceID, linodego.InstanceOffline, timeout)
+	return client.WaitForInstanceStatus(ctx, instanceID, linodego.InstanceOffline, timeout)
 }
 
 // changeInstanceType resizes the Linode Instance.
-func changeInstanceType(client *linodego.Client, instanceID int, targetType string, d *schema.ResourceData) (*linodego.Instance, error) {
-	instance, err := ensureInstanceOffline(client, instanceID, int(d.Timeout(schema.TimeoutUpdate)))
+func changeInstanceType(
+	ctx context.Context,
+	client *linodego.Client,
+	instanceID int,
+	targetType string,
+	d *schema.ResourceData,
+) (*linodego.Instance, error) {
+	instance, err := ensureInstanceOffline(ctx, client, instanceID, getDeadlineSeconds(ctx, d))
 	if err != nil {
 		return nil, err
 	}
@@ -700,16 +765,19 @@ func changeInstanceType(client *linodego.Client, instanceID int, targetType stri
 		Type:                targetType,
 	}
 
-	if err := client.ResizeInstance(context.Background(), instance.ID, resizeOpts); err != nil {
+	if err := client.ResizeInstance(ctx, instance.ID, resizeOpts); err != nil {
 		return nil, fmt.Errorf("Error resizing Instance %d: %s", instance.ID, err)
 	}
-	_, err = client.WaitForEventFinished(context.Background(), instance.ID, linodego.EntityLinode, linodego.ActionLinodeResize, *instance.Created, int(d.Timeout(schema.TimeoutUpdate).Seconds()))
+	_, err = client.WaitForEventFinished(ctx, instance.ID, linodego.EntityLinode, linodego.ActionLinodeResize,
+		*instance.Created, getDeadlineSeconds(ctx, d))
 	if err != nil {
 		return nil, fmt.Errorf("Error waiting for instance %d to finish resizing: %s", instance.ID, err)
 	}
 
 	// Wait for instance status to go back to idle, offline state
-	if instance, err = client.WaitForInstanceStatus(context.Background(), instance.ID, linodego.InstanceOffline, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+	if instance, err = client.WaitForInstanceStatus(
+		ctx, instance.ID, linodego.InstanceOffline, getDeadlineSeconds(ctx, d),
+	); err != nil {
 		return nil, fmt.Errorf("Error waiting for Instance %d to enter offline state: %s", instance.ID, err)
 	}
 	return instance, nil
@@ -733,43 +801,57 @@ func getDiskSizeChange(oldDisk interface{}, newDisk interface{}) (int, int) {
 	return oldDiskSize, newDiskSize
 }
 
-func changeInstanceDiskSize(client *linodego.Client, instance linodego.Instance, disk linodego.InstanceDisk, targetSize int, d *schema.ResourceData) error {
+func changeInstanceDiskSize(
+	ctx context.Context,
+	client *linodego.Client,
+	instance linodego.Instance,
+	disk linodego.InstanceDisk,
+	targetSize int,
+	d *schema.ResourceData,
+) error {
 	if instance.Specs.Disk < targetSize {
 		return fmt.Errorf("Error resizing disk %d: size exceeds disk size for Instance %d", disk.ID, instance.ID)
 	}
 
 	switch instance.Status {
 	case linodego.InstanceShuttingDown:
-		if _, err := client.WaitForInstanceStatus(context.Background(), instance.ID, linodego.InstanceOffline, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+		if _, err := client.WaitForInstanceStatus(
+			ctx, instance.ID, linodego.InstanceOffline, getDeadlineSeconds(ctx, d),
+		); err != nil {
 			return fmt.Errorf("Error waiting for Instance %d to go offline: %s", instance.ID, err)
 		}
 	case linodego.InstanceOffline:
 	default:
-		if err := client.ShutdownInstance(context.Background(), instance.ID); err != nil {
+		if err := client.ShutdownInstance(ctx, instance.ID); err != nil {
 			return err
 		}
 	}
 
 	// Wait for instance to go offline. Resize the disk once Linode is shut down.
-	if _, err := client.WaitForInstanceStatus(context.Background(), instance.ID, linodego.InstanceOffline, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+	if _, err := client.WaitForInstanceStatus(
+		ctx, instance.ID, linodego.InstanceOffline, getDeadlineSeconds(ctx, d),
+	); err != nil {
 		return fmt.Errorf("Error waiting for Instance %d to go offline: %s", instance.ID, err)
 	}
 
-	if err := client.ResizeInstanceDisk(context.Background(), instance.ID, disk.ID, targetSize); err != nil {
+	if err := client.ResizeInstanceDisk(ctx, instance.ID, disk.ID, targetSize); err != nil {
 		return fmt.Errorf("Error resizing disk %d for Instance %d: %s", disk.ID, instance.ID, err)
 	}
 
 	// Wait for the disk resize operation to complete, and boot instance.
-	_, err := client.WaitForEventFinished(context.Background(), instance.ID, linodego.EntityLinode, linodego.ActionDiskResize, *disk.Updated, int(d.Timeout(schema.TimeoutUpdate).Seconds()))
+	_, err := client.WaitForEventFinished(ctx, instance.ID, linodego.EntityLinode, linodego.ActionDiskResize,
+		*disk.Updated, getDeadlineSeconds(ctx, d))
 	if err != nil {
 		return fmt.Errorf("Error waiting for resize of Instance %d Disk %d: %s", instance.ID, disk.ID, err)
 	}
 
 	// Check to see if the resize operation worked
-	if updatedDisk, err := client.WaitForInstanceDiskStatus(context.Background(), instance.ID, disk.ID, linodego.DiskReady, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+	if updatedDisk, err := client.WaitForInstanceDiskStatus(ctx, instance.ID, disk.ID, linodego.DiskReady,
+		getDeadlineSeconds(ctx, d)); err != nil {
 		return fmt.Errorf("Error waiting disk %d on instance %d to be ready: %s", disk.ID, instance.ID, err)
 	} else if updatedDisk.Size != targetSize {
-		return fmt.Errorf("Error resizing disk %d on instance %d from %d to %d", disk.ID, instance.ID, disk.Size, targetSize)
+		return fmt.Errorf(
+			"Error resizing disk %d on instance %d from %d to %d", disk.ID, instance.ID, disk.Size, targetSize)
 	}
 
 	return nil
@@ -785,7 +867,8 @@ func privateIP(ip net.IP) bool {
 	return private
 }
 
-func assignConfigDevice(device *linodego.InstanceConfigDevice, dev map[string]interface{}, diskIDLabelMap map[string]int) error {
+func assignConfigDevice(
+	device *linodego.InstanceConfigDevice, dev map[string]interface{}, diskIDLabelMap map[string]int) error {
 	if label, ok := dev["disk_label"].(string); ok && len(label) > 0 {
 		if dev["disk_id"], ok = diskIDLabelMap[label]; !ok {
 			return fmt.Errorf(`Error mapping disk label "%s" to ID`, dev["disk_label"])
@@ -799,9 +882,13 @@ func assignConfigDevice(device *linodego.InstanceConfigDevice, dev map[string]in
 }
 
 // getInstanceDefaultDisks gets the boot and swap disk for an instance which has implicit, default disks.
-func getInstanceDefaultDisks(instanceID int, client *linodego.Client) (bootDisk, swapDisk *linodego.InstanceDisk, err error) {
+func getInstanceDefaultDisks(
+	ctx context.Context,
+	instanceID int,
+	client *linodego.Client,
+) (bootDisk, swapDisk *linodego.InstanceDisk, err error) {
 	var disks []linodego.InstanceDisk
-	disks, err = client.ListInstanceDisks(context.Background(), instanceID, nil)
+	disks, err = client.ListInstanceDisks(ctx, instanceID, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error getting instance managed disks: %s", err)
 	}
@@ -811,15 +898,19 @@ func getInstanceDefaultDisks(instanceID int, client *linodego.Client) (bootDisk,
 }
 
 // getInstanceTypeChange checks to see if the linode itself was resized.
-func getInstanceTypeChange(d *schema.ResourceData, client *linodego.Client) (oldSpec, newSpec *linodego.LinodeType, err error) {
+func getInstanceTypeChange(
+	ctx context.Context,
+	d *schema.ResourceData,
+	client *linodego.Client,
+) (oldSpec, newSpec *linodego.LinodeType, err error) {
 	old, new := d.GetChange("type")
 	oldType, newType := old.(string), new.(string)
 
-	oldSpec, err = client.GetType(context.Background(), oldType)
+	oldSpec, err = client.GetType(ctx, oldType)
 	if err != nil {
 		return
 	}
-	newSpec, err = client.GetType(context.Background(), newType)
+	newSpec, err = client.GetType(ctx, newType)
 	if err != nil {
 		return
 	}
@@ -831,6 +922,7 @@ func getInstanceTypeChange(d *schema.ResourceData, client *linodego.Client) (old
 //
 // returns bool describing whether change has occurred.
 func applyInstanceDiskSpec(
+	ctx context.Context,
 	d *schema.ResourceData,
 	client *linodego.Client,
 	instance *linodego.Instance,
@@ -839,7 +931,7 @@ func applyInstanceDiskSpec(
 	if err := assertDiskConfigFitsInstanceType(d, typ); err != nil {
 		return false, err
 	}
-	return updateInstanceDisks(*client, d, *instance)
+	return updateInstanceDisks(ctx, *client, d, *instance)
 }
 
 // assertDiskConfigFitsInstanceType asserts that the cumulative disk space used by a given disk config fits a given
@@ -858,6 +950,7 @@ func assertDiskConfigFitsInstanceType(d *schema.ResourceData, typ *linodego.Lino
 // applyInstanceTypeChange checks to see if the staged disk changes can be supported by the new instance
 // specification. If there is sufficient space, it attempts to update the instance type.
 func applyInstanceTypeChange(
+	ctx context.Context,
 	d *schema.ResourceData,
 	client *linodego.Client,
 	instance *linodego.Instance,
@@ -866,11 +959,12 @@ func applyInstanceTypeChange(
 	if err := assertDiskConfigFitsInstanceType(d, typ); err != nil {
 		return nil, err
 	}
-	return changeInstanceType(client, instance.ID, typ.ID, d)
+	return changeInstanceType(ctx, client, instance.ID, typ.ID, d)
 }
 
 // detachConfigVolumes detaches any volumes associated with an InstanceConfig.Devices struct.
-func detachConfigVolumes(dmap linodego.InstanceConfigDeviceMap, detacher volumeDetacher) error {
+func detachConfigVolumes(
+	ctx context.Context, dmap linodego.InstanceConfigDeviceMap, detacher volumeDetacher) error {
 	// Preallocate our slice of config devices
 	drives := []*linodego.InstanceConfigDevice{
 		dmap.SDA, dmap.SDB, dmap.SDC, dmap.SDD, dmap.SDE, dmap.SDF, dmap.SDG, dmap.SDH,
@@ -890,7 +984,7 @@ func detachConfigVolumes(dmap linodego.InstanceConfigDeviceMap, detacher volumeD
 			defer wg.Done()
 
 			if dev != nil && dev.VolumeID > 0 {
-				err := detacher(context.Background(), dev.VolumeID, "for config attachment")
+				err := detacher(ctx, dev.VolumeID, "for config attachment")
 				if err != nil {
 					errCh <- err
 				}

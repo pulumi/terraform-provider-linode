@@ -3,6 +3,7 @@ package linode
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -27,8 +28,9 @@ func resourceLinodeRDNS() *schema.Resource {
 				ValidateFunc: validation.IsIPAddress,
 			},
 			"rdns": {
-				Type:         schema.TypeString,
-				Description:  "The reverse DNS assigned to this address. For public IPv4 addresses, this will be set to a default value provided by Linode if not explicitly set.",
+				Type: schema.TypeString,
+				Description: "The reverse DNS assigned to this address. For public IPv4 addresses, this will be set " +
+					"to a default value provided by Linode if not explicitly set.",
 				Required:     true,
 				ValidateFunc: validation.StringLenBetween(3, 254),
 			},
@@ -46,6 +48,11 @@ func resourceLinodeRDNSRead(d *schema.ResourceData, meta interface{}) error {
 
 	ip, err := client.GetIPAddress(context.Background(), ipStr)
 	if err != nil {
+		if lerr, ok := err.(*linodego.Error); ok && lerr.Code == 404 {
+			log.Printf("[WARN] removing Linode RDNS %q from state because it no longer exists", ipStr)
+			d.SetId("")
+			return nil
+		}
 		return fmt.Errorf("Error finding the specified Linode RDNS: %s", err)
 	}
 

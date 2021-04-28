@@ -19,6 +19,9 @@ const (
 	LinodeInstanceDeleteTimeout = 10 * time.Minute
 )
 
+const linodeInstanceDeviceDescription = "Device can be either a Disk or Volume identified by disk_id or " +
+	"volume_id. Only one type per slot allowed."
+
 var linodeInstanceDownsizeFailedMessage = `
 Did you try to resize a linode with implicit, default disks to a smaller type? The provider does
 not automatically scale the boot disk to fit an updated instance type. You may need to switch to
@@ -238,8 +241,9 @@ func resourceLinodeInstance() *schema.Resource {
 				Default:  true,
 			},
 			"specs": {
-				Computed: true,
-				Type:     schema.TypeList,
+				Computed:    true,
+				Description: "Information about the resources available to this Linode.",
+				Type:        schema.TypeList,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"disk": {
@@ -272,10 +276,11 @@ func resourceLinodeInstance() *schema.Resource {
 			},
 
 			"alerts": {
-				Computed: true,
-				Type:     schema.TypeList,
-				Optional: true,
-				MaxItems: 1,
+				Computed:    true,
+				Description: "Configuration options for alert triggers on this Linode.",
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"cpu": {
@@ -432,60 +437,68 @@ func resourceLinodeInstance() *schema.Resource {
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"sda": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Computed: true,
-										Optional: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Computed:    true,
+										Optional:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdb": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdc": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdd": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sde": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdf": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdg": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 									"sdh": {
-										Type:     schema.TypeList,
-										MaxItems: 1,
-										Optional: true,
-										Computed: true,
-										Elem:     resourceLinodeInstanceDeviceDisk(),
+										Type:        schema.TypeList,
+										Description: linodeInstanceDeviceDescription,
+										MaxItems:    1,
+										Optional:    true,
+										Computed:    true,
+										Elem:        resourceLinodeInstanceDeviceDisk(),
 									},
 								},
 							},
@@ -1047,8 +1060,10 @@ func resourceLinodeInstanceUpdate(ctx context.Context, d *schema.ResourceData, m
 
 	// apply staged simple updates early
 	if simpleUpdate {
+		instanceID := instance.ID
+
 		if instance, err = client.UpdateInstance(ctx, instance.ID, updateOpts); err != nil {
-			return diag.Errorf("Error updating Instance %d: %s", instance.ID, err)
+			return diag.Errorf("Error updating Instance %d: %s", instanceID, err)
 		}
 	}
 

@@ -29,7 +29,7 @@ terraform {
 
 # Configure the Linode Provider
 provider "linode" {
-  token = "$LINODE_TOKEN"
+  # token = "..."
 }
 
 # Create a Linode
@@ -69,6 +69,8 @@ The following keys can be used to configure the provider.
    The User-Agent Prefix can also be specified using the `LINODE_UA_PREFIX` environment variable.
 
 * `skip_instance_ready_poll` - (Optional) Skip waiting for a linode_instance resource to be running.
+
+* `skip_instance_delete_poll` - (Optional) Skip waiting for a linode_instance resource to finish deleting.
 
 * `min_retry_delay_ms` - (Optional) Minimum delay in milliseconds before retrying a request.
 

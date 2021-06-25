@@ -390,8 +390,9 @@ func resourceLinodeInstance() *schema.Resource {
 				},
 			},
 			"interface": {
-				Type:          schema.TypeList,
-				Description:   "An array of Network Interfaces for this Linode to be created with.",
+				Type: schema.TypeList,
+				Description: "An array of Network Interfaces for this Linode to be created with. " +
+					"If an explicit config or disk is defined, interfaces must be declared in the config block.",
 				Optional:      true,
 				ConflictsWith: []string{"disk", "config"},
 				Elem:          resourceLinodeInstanceConfigInterface(),
@@ -1000,7 +1001,7 @@ func resourceLinodeInstanceCreate(ctx context.Context, d *schema.ResourceData, m
 	}
 
 	// If the instance has implicit disks and config with no specified image it will not boot.
-	if !(disksOk && configsOk) && len(instance.Image) < 1 {
+	if !(disksOk && configsOk) && len(createOpts.Image) < 1 {
 		targetStatus = linodego.InstanceOffline
 	}
 
@@ -1264,9 +1265,14 @@ func resourceLinodeInstanceDelete(ctx context.Context, d *schema.ResourceData, m
 	if err != nil {
 		return diag.Errorf("Error deleting Linode instance %d: %s", id, err)
 	}
-	// Wait for full deletion to assure volumes are detached
-	client.WaitForEventFinished(ctx, int(id), linodego.EntityLinode, linodego.ActionLinodeDelete,
-		minDelete, getDeadlineSeconds(ctx, d))
+
+	if !meta.(*ProviderMeta).Config.SkipInstanceDeletePoll {
+		// Wait for full deletion to assure volumes are detached
+		if _, err = client.WaitForEventFinished(ctx, int(id), linodego.EntityLinode, linodego.ActionLinodeDelete,
+			minDelete, getDeadlineSeconds(ctx, d)); err != nil {
+			return diag.Errorf("failed to wait for instance %d to be deleted: %s", id, err)
+		}
+	}
 
 	d.SetId("")
 	return nil

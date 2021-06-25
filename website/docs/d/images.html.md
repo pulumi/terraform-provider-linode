@@ -66,7 +66,9 @@ Each Linode image will be stored in the `images` attribute and will export the f
 
 * `size` - The minimum size this Image needs to deploy. Size is in MB. example: 2500
 
-* `type` - How the Image was created. Manual Images can be created at any time. "Automatic" Images are created automatically from a deleted Linode.
+* `status` - The current status of this image. (`creating`, `pending_upload`, `available`)
+
+* `type` - How the Image was created. Manual Images can be created at any time. "Automatic" Images are created automatically from a deleted Linode. (`manual`, `automatic`)
 
 * `vendor` - The upstream distribution vendor. `None` for private Images.
 
